@@ -424,7 +424,8 @@
     const btn = document.getElementById('registerBtn');
     btn.disabled = true; btn.textContent = 'Kayıt olunuyor...';
     try {
-      await authFetch('/signup', { email, password });
+      // signInWithOtp sends a real 6-digit code via the magic link template
+      await authFetch('/otp', { email, create_user: true, options: { shouldCreateUser: true } });
       pendingEmail    = email;
       pendingPassword = password;
       document.getElementById('verifySubtitle').textContent =
@@ -465,8 +466,20 @@
     const btn = document.getElementById('verifyBtn');
     btn.disabled = true; btn.textContent = 'Doğrulanıyor...';
     try {
-      const data = await authFetch('/verify', { type: 'signup', email: pendingEmail, token });
+      // Verify OTP sent via /otp endpoint (magic link type)
+      const data = await authFetch('/verify', { type: 'magiclink', email: pendingEmail, token });
       saveSession(data);
+      // Set password on the newly created account
+      if (pendingPassword) {
+        try {
+          await fetch(`${AUTH}/user`, {
+            method: 'PUT',
+            headers: baseHeaders(data.access_token),
+            body: JSON.stringify({ password: pendingPassword })
+          });
+          pendingPassword = '';
+        } catch (_) {}
+      }
       enterApp();
     } catch (e) {
       showMsg('verifyError', e.message);
@@ -478,7 +491,7 @@
   document.getElementById('resendBtn').addEventListener('click', async () => {
     showMsg('verifyError', ''); showMsg('verifySuccess', '');
     try {
-      await authFetch('/resend', { type: 'signup', email: pendingEmail });
+      await authFetch('/otp', { email: pendingEmail, create_user: false });
       showMsg('verifySuccess', 'Kod tekrar gönderildi.', false);
     } catch (e) {
       showMsg('verifyError', e.message);
